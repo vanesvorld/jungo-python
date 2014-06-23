@@ -2,11 +2,9 @@
 #
 # Copyright 2008, 2009 (C) Jose Vasconcellos <jvasco@verizon.net>
 #
-# A script that can communicate with jungo-based routers
-# (such as MI424-WR, USR8200 and WRV54G) to backup the installed
-# firmware and replace the boot loader.
+# 
 #
-# Tested with Python 2.5 on Linux and Windows
+# Tested with Python 3.4 on Windows
 #
 """Usage: %s [options] <IP_address> [image.bin | url]
 Valid options:
@@ -38,8 +36,9 @@ import http.server
 
 reboot = 0
 HOST = "192.168.1.1"
-PORT = 8080
+PORT = 23
 user = "admin"
+timeout = 5
 #password = getpass.getpass()
 password = "password1"
 proto = "http"
@@ -56,34 +55,34 @@ device="ixp0"
 ####################
 
 def start_server(server):
-    httpd = SocketServer.TCPServer((server,PORT),SimpleHTTPServer.SimpleHTTPRequestHandler)
+    httpd = socketserver.TCPServer((server,PORT),http.server.SimpleHTTPRequestHandler)
     thread.start_new_thread(httpd.serve_forever,())
 
 ####################
 
 def get_flash_size():
     # make sure we don't have an A0 stepping
-    tn.write("cat /proc/cpuinfo\n")
-    buf = tn.read_until("Returned 0", 3)
+    tn.write(("cat /proc/cpuinfo\n").encode('ascii'))
+    buf = tn.read_until(b"Returned 0", 3)
     if not buf:
         print ("Unable to obtain CPU information; make sure to not use A0 stepping!")
-    elif buf.find('rev 0') > 0:
+    elif buf.find(b'rev 0') > 0:
         print ("Warning: IXP42x stepping A0 detected!")
         if imagefile or url:
             print ("Error: No linux support for A0 stepping!")
             sys.exit(2)
 
     # now get flash size
-    tn.write("cat /proc/mtd\n")
-    buf = tn.read_until("Returned 0", 3)
+    tn.write(("cat /proc/mtd\n").encode('ascii'))
+    buf = tn.read_until(b"Returned 0", 3)
     if buf:
-        i = buf.find('mtd0:')
+        i = buf.find(b'mtd0:')
         if i > 0:
             return int(buf[i+6:].split()[0],16)
         # use different command
-        tn.write("flash_layout\n")
-        buf = tn.read_until("Returned 0", 3)
-        i = buf.rfind('Range ')
+        tn.write(("flash_layout\n").encode('ascii'))
+        buf = tn.read_until(b"Returned 0", 3)
+        i = buf.find(b'Range ')
         if i > 0:
             return int(buf[i+17:].split()[0],16)
         print ("Can't determine flash size!")
@@ -94,8 +93,8 @@ def get_flash_size():
 def image_dump(tn, dumpfile):
     if not dumpfile:
         tn.write("ver\n");
-        buf = tn.read_until("Returned 0",2)
-        i = buf.find("Platform:")
+        buf = tn.read_until(b"Returned 0",2)
+        i = buf.find(b"Platform:")
         if i < 0:
             Platform="jungo"
         else:
@@ -104,7 +103,7 @@ def image_dump(tn, dumpfile):
             platform=line[:i].split()[-1]
 
         tn.write("rg_conf_print /dev/%s/mac\n" % device);
-        buf = tn.read_until("Returned 0",3)
+        buf = tn.read_until(b"Returned 0",3)
 
         i = buf.find("mac(")
         if i > 0:
@@ -211,25 +210,25 @@ else:
 ####################
 # create a telnet session to the router
 try:
-    tn = telnetlib.Telnet(HOST)
+    tn = telnetlib.Telnet(HOST,PORT)
 except socket.error (msg):
     print ("Unable to establish telnet session to %s: %s") % (HOST, msg)
     sys.exit(1)
 
 tn.set_option_negotiation_callback(telnet_option)
 
-buf = tn.read_until("Username: ", 3)
+buf = tn.read_until(b"Username: ", 3)
 if not buf:
     telnet_timeout()
-tn.write(user+"\n")
+tn.write((user+"\n").encode('ascii'))
 if password:
-    buf = tn.read_until("Password: ", 3)
+    buf = tn.read_until(b"Password: ", 3)
     if not buf:
         telnet_timeout()
-    tn.write(password+"\n")
+    tn.write((password+"\n").encode('ascii'))
 
 # wait for prompt
-buf = tn.read_until("> ", 3)
+buf = tn.read_until(b"> ", 3)
 if not buf:
     telnet_timeout()
 
